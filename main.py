@@ -2,18 +2,20 @@ import os
 import uuid
 from typing import Dict
 
+import uvicorn
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import HttpUrl
 from fastapi.middleware.cors import CORSMiddleware
-
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from core import deck_temp_dir, generate_anki_cards, purge_cache, voice_temp_dir
 from exception import *
 
 app = FastAPI()
+scheduler = AsyncIOScheduler()
 
 app.add_middleware(
     CORSMiddleware,
@@ -102,3 +104,13 @@ async def download_apkg(task_id: str):
 @app.on_event("shutdown")
 async def shutdown_event():
     await purge_cache()
+
+
+@app.on_event("startup")
+async def _configure_scheduler():
+    scheduler.add_job(purge_cache, trigger="interval", hours=6)
+    scheduler.start()
+
+
+if __name__ == "__main__":
+    uvicorn.run(app="main:app", host="0.0.0.0", port=8080, reload=False)

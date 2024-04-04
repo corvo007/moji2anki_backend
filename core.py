@@ -23,7 +23,7 @@ deck_temp_dir = os.path.join(os.path.dirname(__file__), "deck_temp")
 font_dir = os.path.join(os.path.dirname(__file__), "fonts")
 
 os.makedirs(voice_temp_dir, exist_ok=True)
-os.makedirs(deck_temp_dir,exist_ok=True)
+os.makedirs(deck_temp_dir, exist_ok=True)
 
 
 def is_kana(word):
