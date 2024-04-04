@@ -3,15 +3,15 @@ import uuid
 from typing import Dict
 
 import uvicorn
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import HttpUrl
-from fastapi.middleware.cors import CORSMiddleware
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from core import deck_temp_dir, generate_anki_cards, purge_cache, voice_temp_dir
+from core import deck_temp_dir, generate_anki_cards, purge_cache
 from exception import *
 
 app = FastAPI()
@@ -19,10 +19,9 @@ scheduler = AsyncIOScheduler()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins="*",
-    allow_credentials=True,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_origins=["*"],  # 允许的源地址
+    allow_methods=["*"],  # 允许的方法（"GET", "POST" 等）
+    allow_headers=["*"],  # 允许的请求头
 )
 
 # 存储进度日志，其中每项任务是一个列表，记录了该任务的状态变更历史
@@ -113,4 +112,4 @@ async def _configure_scheduler():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app="main:app", host="0.0.0.0", port=8080, reload=False)
+    uvicorn.run(app="main:app", host="0.0.0.0", port=10000, reload=False)
