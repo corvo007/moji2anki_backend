@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import HttpUrl
 
-from core import deck_temp_dir, generate_anki_cards, purge_cache
+from core import deck_temp_dir, generate_anki_cards, purge_deck_cache, purge_voice_cache
 from exception import *
 
 app = FastAPI()
@@ -69,7 +69,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 # API端点，用于创建APKG文件
 @app.get("/create-apkg/", response_class=JSONResponse)
 async def create_apkg(background_tasks: BackgroundTasks, url: HttpUrl = Query(...)):
-    task_id = str(uuid.uuid4())
+    task_id = str(uuid.uuid4().hex)
     update_progress_log(task_id, "Task created")
 
     # 调用创建APKG后台任务的函数
@@ -102,12 +102,13 @@ async def download_apkg(task_id: str):
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    await purge_cache()
+    await purge_deck_cache()
+    await purge_voice_cache()
 
 
 @app.on_event("startup")
 async def _configure_scheduler():
-    scheduler.add_job(purge_cache, trigger="interval", hours=6)
+    scheduler.add_job(purge_deck_cache, trigger="interval", hours=6)
     scheduler.start()
 
 

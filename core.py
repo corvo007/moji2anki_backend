@@ -2,19 +2,18 @@ import asyncio
 import os.path
 import random
 import re
-import time
-from typing import Union
+from typing import Tuple, Union
 from urllib.parse import urlparse
 
 import genanki
 import httpx
+from genanki import Note
 
 from const import *
 from exception import *
 from log import logger
 
 card_model = genanki.Model(**MODELS)
-card_deck = genanki.Deck(**DECK)
 
 regex_pattern = re.compile(r"\[(.*?)\]")
 
@@ -145,16 +144,7 @@ async def get_word_voice(word_id: str) -> Union[bool, str]:
     return True
 
 
-async def generate_word_card_batch(word_id_list: list, source: str = ""):
-    download_failed_voice = []
-    for n, word in enumerate(word_id_list, 1):
-        logger.info(f"正在生成第{n}/{len(word_id_list)}张单词卡片")
-        download_failed_voice = await generate_word_card(word, source)
-
-    return download_failed_voice
-
-
-async def generate_word_card(word_id: str, source: str):
+async def generate_word_card(word_id: str, source: str) -> Tuple[str, Note]:
     download_failed_voice = ""
     word = await get_word_detail(word_id)
     definition = ""
@@ -174,7 +164,7 @@ async def generate_word_card(word_id: str, source: str):
         if d["lang"] == "ja" and d["relaId"] == rel_id:  # 同一词条的日语解释
             definition += f'<span class="jptext">({d["title"]})</span>'
         rel_id = d["relaId"]
-    accent = word["result"][0]["accent"]
+    accent = word["result"][0]["accent"] if "accent" in word["result"] else ""
     tags = word["result"][0]["tags"].split("#") if "tags" in word["result"] else []
     tags.append("moji2anki")
     if source:
@@ -199,9 +189,8 @@ async def generate_word_card(word_id: str, source: str):
         "tags": tags,
     }
     note = genanki.Note(**note_dict)
-    card_deck.add_note(note)
 
-    return download_failed_voice
+    return download_failed_voice, note
 
 
 def extract_last_segment(url: str) -> str:
@@ -217,6 +206,7 @@ def extract_last_segment(url: str) -> str:
 async def generate_anki_cards(
     word_list_url: str, task_id: str, update_progress: callable
 ):
+    card_deck = genanki.Deck(**DECK)
     try:
         word_list_id = extract_last_segment(word_list_url)
         if word_list_id == "":
@@ -277,7 +267,8 @@ async def generate_anki_cards(
         for n, word in enumerate(word_ids, 1):
             logger.info(f"正在生成第{n}/{len(word_ids)}张单词卡片")
             update_progress(task_id, f"正在生成第{n}/{len(word_ids)}张单词卡片")
-            download_failed_voice = await generate_word_card(word, word_list_name)
+            download_failed_voice, note = await generate_word_card(word, word_list_name)
+            card_deck.add_note(note)
             if download_failed_voice:
                 logger.warning(f"语音下载失败:{download_failed_voice}")
                 update_progress(task_id, f"语音下载失败:{download_failed_voice}")
@@ -296,21 +287,26 @@ async def generate_anki_cards(
         )
         card_package.write_to_file(os.path.join(deck_temp_dir, f"{task_id}.apkg"))
         update_progress(task_id, "SUCCESS")
+        await purge_voice_cache()
     except Exception as e:
         logger.exception("Error occurred")
         update_progress(task_id, f"Failed: {str(type(e))[8:-2]}:{str(e)}")
+        await purge_voice_cache()
 
 
-async def purge_cache():
-    entries = os.listdir(voice_temp_dir)
-    for entry in entries:
-        full_path = os.path.join(voice_temp_dir, entry)
-        if os.path.isfile(full_path):
-            os.remove(full_path)
-            logger.debug(f"Deleted file: {full_path}")
+async def purge_deck_cache():
     entries2 = os.listdir(deck_temp_dir)
     for entry in entries2:
         full_path = os.path.join(deck_temp_dir, entry)
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+            logger.debug(f"Deleted file: {full_path}")
+
+
+async def purge_voice_cache():
+    entries = os.listdir(voice_temp_dir)
+    for entry in entries:
+        full_path = os.path.join(voice_temp_dir, entry)
         if os.path.isfile(full_path):
             os.remove(full_path)
             logger.debug(f"Deleted file: {full_path}")
